@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Office Seating &amp; Carpool Plan</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --panel:#ffffff; --border:#e2e4e9; --text:#1c1f26; --muted:#6b7280;
+    --accent:#2f5597; --accent-dark:#203a68; --red:#c0392b; --red-bg:#fde8e6;
+    --orange:#b06a00; --orange-bg:#fff2df; --green:#1e7e34; --green-bg:#e6f6ea;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:Arial, Helvetica, sans-serif; background:var(--bg); color:var(--text);
+    padding:24px; line-height:1.4;
+  }
+  .wrap{max-width:960px; margin:0 auto;}
+  header{
+    background:linear-gradient(135deg, var(--accent), var(--accent-dark));
+    color:#fff; padding:20px 24px; border-radius:10px; margin-bottom:18px;
+  }
+  header h1{margin:0 0 4px; font-size:22px;}
+  header p{margin:0; font-size:13px; opacity:.9;}
+  .toolbar{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;}
+  button{
+    font-family:inherit; font-size:13px; padding:8px 14px; border-radius:6px; border:1px solid var(--border);
+    background:var(--panel); color:var(--text); cursor:pointer;
+  }
+  button:hover{background:#eef0f4;}
+  button.primary{background:var(--accent); color:#fff; border-color:var(--accent);}
+  button.primary:hover{background:var(--accent-dark);}
+  button.danger{color:var(--red); border-color:#f0c4c0;}
+  button.small{padding:3px 8px; font-size:12px;}
+  input[type=text], select{
+    font-family:inherit; font-size:13px; padding:7px 9px; border-radius:6px; border:1px solid var(--border); background:#fff;
+  }
+  .panel{
+    background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:18px; margin-bottom:18px;
+  }
+  .panel h2{margin:0 0 12px; font-size:16px;}
+  #alertBanner{
+    display:none; background:var(--red-bg); border:1px solid #f0c4c0; color:var(--red);
+    border-radius:10px; padding:14px 18px; margin-bottom:18px; font-size:13px;
+  }
+  #alertBanner.show{display:block;}
+  #alertBanner strong{display:block; margin-bottom:6px; font-size:14px;}
+  #alertBanner ul{margin:4px 0 0; padding-left:18px;}
+
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th, td{text-align:left; padding:8px 10px; border-bottom:1px solid var(--border);}
+  th{color:var(--muted); font-weight:bold; font-size:12px; text-transform:uppercase; letter-spacing:.03em;}
+  .status-pill{
+    display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:bold; cursor:pointer; border:none;
+  }
+  .status-active{background:var(--green-bg); color:var(--green);}
+  .status-left{background:var(--red-bg); color:var(--red);}
+  .add-row{display:flex; gap:8px; margin-top:12px;}
+  .add-row input{flex:1;}
+
+  .cars{display:grid; grid-template-columns:repeat(auto-fill, minmax(260px,1fr)); gap:14px;}
+  .car-card{border:1px solid var(--border); border-radius:10px; padding:14px; background:#fbfbfc;}
+  .car-card .car-title{
+    display:flex; justify-content:space-between; align-items:center; gap:6px; margin-bottom:10px;
+  }
+  .car-card .car-title input{font-weight:bold; font-size:14px; border:none; background:transparent; width:100%; padding:2px 4px;}
+  .car-card .car-title input:hover, .car-card .car-title input:focus{background:#fff; border:1px solid var(--border);}
+  .driver-row{font-size:12px; color:var(--muted); margin-bottom:10px; display:flex; align-items:center; gap:6px;}
+  .driver-row select{flex:1;}
+  .chip-list{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; min-height:26px;}
+  .chip{
+    display:inline-flex; align-items:center; gap:6px; background:#eef0f4; border-radius:999px; padding:4px 6px 4px 12px; font-size:12.5px;
+  }
+  .chip.left{background:var(--red-bg); color:var(--red); font-weight:bold;}
+  .chip button{
+    border:none; background:transparent; color:inherit; font-size:13px; cursor:pointer; padding:2px 6px; line-height:1;
+  }
+  .car-card .add-passenger{display:flex; gap:6px;}
+  .car-card .add-passenger select{flex:1;}
+  .remove-car{margin-left:auto;}
+
+  footer{text-align:center; font-size:11px; color:var(--muted); margin-top:20px;}
+
+  @media print {
+    body{background:#fff; padding:0;}
+    .toolbar, #alertBanner, .panel.roster-panel, .remove-car, .chip button, .add-passenger, .driver-row select, footer{display:none !important;}
+    header{background:#fff !important; color:#000 !important; box-shadow:none;}
+    .car-card{break-inside:avoid;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>🚗 Office Seating &amp; Carpool Plan</h1>
+    <p>Keep the roster up to date — anyone marked "Left" is flagged automatically wherever they're still seated.</p>
+  </header>
+
+  <div class="toolbar">
+    <button class="primary" onclick="window.print()">🖨️ Print seating plan</button>
+    <button onclick="exportData()">⬇️ Export backup (JSON)</button>
+    <button onclick="document.getElementById('importFile').click()">⬆️ Import backup</button>
+    <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importData(event)">
+    <button class="danger" onclick="resetToSeed()">↺ Reset to original data</button>
+  </div>
+
+  <div id="alertBanner"></div>
+
+  <div class="panel roster-panel">
+    <h2>Employee Roster</h2>
+    <table>
+      <thead><tr><th>Name</th><th>Status</th><th></th></tr></thead>
+      <tbody id="rosterBody"></tbody>
+    </table>
+    <div class="add-row">
+      <input type="text" id="newEmployeeName" placeholder="New employee name">
+      <button class="primary" onclick="addEmployee()">+ Add employee</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Cars &amp; Groups</h2>
+    <div class="cars" id="carsGrid"></div>
+    <div class="add-row">
+      <input type="text" id="newCarName" placeholder="New car / group name (e.g. Priya's Car)">
+      <button class="primary" onclick="addCar()">+ Add car / group</button>
+    </div>
+  </div>
+
+  <footer>Data is saved in this browser only (localStorage). Use "Export backup" regularly if you use more than one device/browser.</footer>
+</div>
+
+<script>
+const STORAGE_KEY = "seatingPlanData_v1";
+
+const SEED = {
+  roster: [
+    {id:"rahul", name:"Rahul", status:"active"},
+    {id:"sultan", name:"Sultan", status:"active"},
+    {id:"sukhmeet", name:"Sukhmeet", status:"active"},
+    {id:"gobind", name:"Gobind", status:"active"},
+    {id:"priya", name:"Priya", status:"active"},
+    {id:"lalit", name:"Lalit", status:"active"},
+    {id:"vishwas", name:"Vishwas", status:"active"},
+    {id:"ayush", name:"Ayush", status:"active"},
+    {id:"mansi", name:"Mansi", status:"active"},
+    {id:"jatin", name:"Jatin", status:"active"},
+    {id:"ankush", name:"Ankush", status:"active"},
+    {id:"mehak", name:"Mehak", status:"active"},
+    {id:"anjali", name:"Anjali", status:"active"},
+    {id:"tanvi", name:"Tanvi", status:"active"},
+    {id:"anshul", name:"Anshul", status:"active"},
+    {id:"lokesh", name:"Lokesh", status:"active"},
+    {id:"sarita", name:"Sarita", status:"active"},
+    {id:"palak", name:"Palak", status:"active"},
+    {id:"tinku", name:"Tinku", status:"active"},
+    {id:"bhavey", name:"Bhavey", status:"active"},
+    {id:"vansh", name:"Vansh", status:"active"},
+    {id:"aman", name:"Aman", status:"active"},
+    {id:"akshat", name:"Akshat", status:"active"},
+    {id:"sudha", name:"Sudha", status:"active"},
+    {id:"amit", name:"Amit", status:"active"},
+    {id:"ashish", name:"Ashish", status:"active"},
+  ],
+  cars: [
+    {id:"car1", name:"Rahul's Car", driverId:"rahul", passengerIds:["sultan","sukhmeet","gobind","priya"]},
+    {id:"car2", name:"OD Car (Lalit)", driverId:"lalit", passengerIds:["vishwas","ayush","mansi"]},
+    {id:"car3", name:"Jatin's Car", driverId:"jatin", passengerIds:["ankush","mehak","anjali","tanvi"]},
+    {id:"car4", name:"Anshul's Car", driverId:"anshul", passengerIds:["lokesh","sarita"]},
+    {id:"car5", name:"On their Own", driverId:null, passengerIds:["palak","tinku","bhavey","vansh","aman","akshat","sudha","amit","ashish"]},
+  ]
+};
+
+let data = load();
+
+function load(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if(!raw) return JSON.parse(JSON.stringify(SEED));
+  try{ return JSON.parse(raw); } catch(e){ return JSON.parse(JSON.stringify(SEED)); }
+}
+function save(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  render();
+}
+function resetToSeed(){
+  if(!confirm("Reset roster and cars back to the original data? This discards your current changes.")) return;
+  data = JSON.parse(JSON.stringify(SEED));
+  save();
+}
+function uid(prefix){ return prefix + "_" + Math.random().toString(36).slice(2,9); }
+function employeeById(id){ return data.roster.find(e => e.id === id); }
+function employeeName(id){ const e = employeeById(id); return e ? e.name : "(unknown)"; }
+function isLeft(id){ const e = employeeById(id); return e ? e.status === "left" : false; }
+
+function addEmployee(){
+  const input = document.getElementById("newEmployeeName");
+  const name = input.value.trim();
+  if(!name) return;
+  data.roster.push({id: uid("emp"), name, status:"active"});
+  input.value = "";
+  save();
+}
+function toggleStatus(id){
+  const e = employeeById(id);
+  e.status = e.status === "active" ? "left" : "active";
+  save();
+}
+function deleteEmployee(id){
+  const name = employeeName(id);
+  if(!confirm(`Remove ${name} from the roster entirely? They will also be removed from any car.`)) return;
+  data.roster = data.roster.filter(e => e.id !== id);
+  data.cars.forEach(c => {
+    if(c.driverId === id) c.driverId = null;
+    c.passengerIds = c.passengerIds.filter(pid => pid !== id);
+  });
+  save();
+}
+
+function addCar(){
+  const input = document.getElementById("newCarName");
+  const name = input.value.trim();
+  if(!name) return;
+  data.cars.push({id: uid("car"), name, driverId:null, passengerIds:[]});
+  input.value = "";
+  save();
+}
+function renameCar(carId, value){
+  const car = data.cars.find(c => c.id === carId);
+  car.name = value;
+  save();
+}
+function deleteCar(carId){
+  const car = data.cars.find(c => c.id === carId);
+  if(!confirm(`Delete "${car.name}"? This does not remove the employees from the roster.`)) return;
+  data.cars = data.cars.filter(c => c.id !== carId);
+  save();
+}
+function setDriver(carId, driverId){
+  const car = data.cars.find(c => c.id === carId);
+  car.driverId = driverId || null;
+  save();
+}
+function addPassenger(carId, empId){
+  if(!empId) return;
+  const car = data.cars.find(c => c.id === carId);
+  if(!car.passengerIds.includes(empId)) car.passengerIds.push(empId);
+  save();
+}
+function removePassenger(carId, empId){
+  const car = data.cars.find(c => c.id === carId);
+  car.passengerIds = car.passengerIds.filter(id => id !== empId);
+  save();
+}
+
+function exportData(){
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "seating-plan-backup.json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+function importData(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const parsed = JSON.parse(reader.result);
+      if(!parsed.roster || !parsed.cars) throw new Error("bad shape");
+      data = parsed;
+      save();
+    }catch(e){
+      alert("That file doesn't look like a valid seating plan backup.");
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = "";
+}
+
+function render(){
+  renderAlert();
+  renderRoster();
+  renderCars();
+}
+
+function renderAlert(){
+  const banner = document.getElementById("alertBanner");
+  const flagged = [];
+  data.cars.forEach(car => {
+    const people = [];
+    if(car.driverId && isLeft(car.driverId)) people.push(employeeName(car.driverId) + " (driver)");
+    car.passengerIds.filter(isLeft).forEach(id => people.push(employeeName(id)));
+    if(people.length) flagged.push({car: car.name, people});
+  });
+  if(!flagged.length){ banner.classList.remove("show"); banner.innerHTML=""; return; }
+  banner.classList.add("show");
+  banner.innerHTML = "<strong>⚠️ These employees have left but are still assigned to a car — reassign their seat:</strong>" +
+    "<ul>" + flagged.map(f => `<li><strong>${f.car}:</strong> ${f.people.join(", ")}</li>`).join("") + "</ul>";
+}
+
+function renderRoster(){
+  const body = document.getElementById("rosterBody");
+  body.innerHTML = "";
+  data.roster.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(e => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${e.name}</td>
+      <td><button class="status-pill ${e.status==='active'?'status-active':'status-left'}" onclick="toggleStatus('${e.id}')">${e.status==='active'?'Active':'Left'}</button></td>
+      <td><button class="small danger" onclick="deleteEmployee('${e.id}')">Remove</button></td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+function renderCars(){
+  const grid = document.getElementById("carsGrid");
+  grid.innerHTML = "";
+  data.cars.forEach(car => {
+    const card = document.createElement("div");
+    card.className = "car-card";
+
+    const availableForDriver = data.roster.filter(e => e.status === "active" || e.id === car.driverId);
+    const driverOptions = `<option value="">— no driver / self-drive —</option>` +
+      availableForDriver.map(e => `<option value="${e.id}" ${e.id===car.driverId?"selected":""}>${e.name}${e.status==='left'?' (left)':''}</option>`).join("");
+
+    const chipHtml = car.passengerIds.map(id => {
+      const left = isLeft(id);
+      return `<span class="chip ${left?'left':''}">${employeeName(id)}${left?' ⚠️':''}<button onclick="removePassenger('${car.id}','${id}')">✕</button></span>`;
+    }).join("");
+
+    const availableToAdd = data.roster.filter(e => !car.passengerIds.includes(e.id) && e.id !== car.driverId && e.status === "active");
+    const addOptions = `<option value="">+ add passenger…</option>` + availableToAdd.map(e => `<option value="${e.id}">${e.name}</option>`).join("");
+
+    card.innerHTML = `
+      <div class="car-title">
+        <input type="text" value="${car.name}" onchange="renameCar('${car.id}', this.value)">
+        <button class="small danger remove-car" onclick="deleteCar('${car.id}')">✕</button>
+      </div>
+      <div class="driver-row">
+        Driver:
+        <select onchange="setDriver('${car.id}', this.value)">${driverOptions}</select>
+      </div>
+      <div class="chip-list">${chipHtml || '<span style="color:var(--muted); font-size:12px;">No passengers yet</span>'}</div>
+      <div class="add-passenger">
+        <select onchange="addPassenger('${car.id}', this.value); this.value='';">${addOptions}</select>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+render();
+</script>
+</body>
+</html>
