@@ -15,7 +15,16 @@
     margin:0; font-family:Arial, Helvetica, sans-serif; background:var(--bg); color:var(--text);
     padding:24px; line-height:1.4;
   }
-  .wrap{max-width:960px; margin:0 auto;}
+  .wrap{max-width:1200px; margin:0 auto;}
+  .layout{display:flex; gap:20px; align-items:flex-start;}
+  .main-col{flex:1; min-width:0;}
+  .sidebar{width:260px; flex-shrink:0;}
+  .sidebar .panel{position:sticky; top:20px;}
+  @media (max-width:860px){
+    .layout{flex-direction:column;}
+    .sidebar{width:100%;}
+    .sidebar .panel{position:static;}
+  }
   header{
     background:linear-gradient(135deg, var(--accent), var(--accent-dark));
     color:#fff; padding:20px 24px; border-radius:10px; margin-bottom:18px;
@@ -67,17 +76,26 @@
   .add-row input{flex:1;}
 
   .cars{display:grid; grid-template-columns:repeat(auto-fill, minmax(260px,1fr)); gap:14px;}
-  .car-card{border:1px solid var(--border); border-radius:10px; padding:14px; background:#fbfbfc;}
-  .car-card .car-title{
-    display:flex; justify-content:space-between; align-items:center; gap:6px; margin-bottom:10px;
+  .car-card{
+    border:1px solid var(--border); border-top:4px solid var(--car-color, var(--accent));
+    border-radius:10px; padding:14px; background:#fbfbfc;
   }
+  .car-card .car-title{
+    display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:10px;
+  }
+  .car-icon{
+    width:34px; height:34px; border-radius:50%; background:var(--car-color, var(--accent));
+    color:#fff; display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0;
+  }
+  .car-title-text{flex:1; min-width:0;}
   .car-card .car-title input{font-weight:bold; font-size:14px; border:none; background:transparent; width:100%; padding:2px 4px;}
   .car-card .car-title input:hover, .car-card .car-title input:focus{background:#fff; border:1px solid var(--border);}
   .driver-row{font-size:12px; color:var(--muted); margin-bottom:10px; display:flex; align-items:center; gap:6px;}
+  .driver-row .driver-icon{flex-shrink:0;}
   .driver-row select{flex:1;}
   .chip-list{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; min-height:26px;}
   .chip{
-    display:inline-flex; align-items:center; gap:6px; background:#eef0f4; border-radius:999px; padding:4px 6px 4px 12px; font-size:12.5px;
+    display:inline-flex; align-items:center; gap:5px; background:#eef0f4; border-radius:999px; padding:4px 6px 4px 10px; font-size:12.5px;
   }
   .chip.left{background:var(--red-bg); color:var(--red); font-weight:bold;}
   .chip button{
@@ -87,11 +105,20 @@
   .car-card .add-passenger select{flex:1;}
   .remove-car{margin-left:auto;}
 
+  .left-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px;}
+  .left-list li{
+    background:var(--red-bg); border:1px solid #f0c4c0; border-radius:8px; padding:8px 10px; font-size:13px;
+  }
+  .left-list .left-name{font-weight:bold; color:var(--red); display:block;}
+  .left-list .left-where{font-size:11.5px; color:var(--red); opacity:.85; display:block; margin-top:2px;}
+  .left-list li .small{margin-top:6px;}
+  .empty-note{font-size:12.5px; color:var(--muted);}
+
   footer{text-align:center; font-size:11px; color:var(--muted); margin-top:20px;}
 
   @media print {
     body{background:#fff; padding:0;}
-    .toolbar, #alertBanner, .panel.roster-panel, .remove-car, .chip button, .add-passenger, .driver-row select, footer{display:none !important;}
+    .toolbar, #alertBanner, .panel.roster-panel, .sidebar, .remove-car, .chip button, .add-passenger, .driver-row select, footer{display:none !important;}
     header{background:#fff !important; color:#000 !important; box-shadow:none;}
     .car-card{break-inside:avoid;}
   }
@@ -107,6 +134,7 @@
 
   <div class="toolbar">
     <button class="primary" onclick="window.print()">🖨️ Print seating plan</button>
+    <button class="primary" onclick="exportPdf()" title="Opens the print dialog — choose &quot;Save as PDF&quot; as the destination">📄 Export PDF</button>
     <button onclick="exportData()">⬇️ Export backup (JSON)</button>
     <button onclick="document.getElementById('importFile').click()">⬆️ Import backup</button>
     <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importData(event)">
@@ -115,34 +143,45 @@
 
   <div id="alertBanner"></div>
 
-  <div class="panel roster-panel" id="rosterPanel">
-    <div class="panel-header">
-      <h2>Employee Roster</h2>
-      <button class="small" id="rosterToggleBtn" onclick="toggleRoster()">Show</button>
+  <div class="layout">
+    <div class="main-col">
+      <div class="panel roster-panel" id="rosterPanel">
+        <div class="panel-header">
+          <h2>Employee Roster</h2>
+          <button class="small" id="rosterToggleBtn" onclick="toggleRoster()">Show</button>
+        </div>
+        <div class="panel-body">
+          <table>
+            <thead><tr><th>Name</th><th>Status</th><th></th></tr></thead>
+            <tbody id="rosterBody"></tbody>
+          </table>
+          <div class="add-row">
+            <input type="text" id="newEmployeeName" placeholder="New employee name">
+            <button class="primary" onclick="addEmployee()">+ Add employee</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Cars &amp; Groups</h2>
+        <div id="unassignedBox"></div>
+        <div class="cars" id="carsGrid"></div>
+        <div class="add-row">
+          <input type="text" id="newCarName" placeholder="New car / group name (e.g. Priya's Car)">
+          <button class="primary" onclick="addCar()">+ Add car / group</button>
+        </div>
+      </div>
+
+      <footer>Data is saved in this browser only (localStorage). Use "Export backup" regularly if you use more than one device/browser.</footer>
     </div>
-    <div class="panel-body">
-      <table>
-        <thead><tr><th>Name</th><th>Status</th><th></th></tr></thead>
-        <tbody id="rosterBody"></tbody>
-      </table>
-      <div class="add-row">
-        <input type="text" id="newEmployeeName" placeholder="New employee name">
-        <button class="primary" onclick="addEmployee()">+ Add employee</button>
+
+    <div class="sidebar">
+      <div class="panel">
+        <h2>🚪 Left the Company</h2>
+        <div id="leftSidebar"></div>
       </div>
     </div>
   </div>
-
-  <div class="panel">
-    <h2>Cars &amp; Groups</h2>
-    <div id="unassignedBox"></div>
-    <div class="cars" id="carsGrid"></div>
-    <div class="add-row">
-      <input type="text" id="newCarName" placeholder="New car / group name (e.g. Priya's Car)">
-      <button class="primary" onclick="addCar()">+ Add car / group</button>
-    </div>
-  </div>
-
-  <footer>Data is saved in this browser only (localStorage). Use "Export backup" regularly if you use more than one device/browser.</footer>
 </div>
 
 <script>
@@ -285,6 +324,10 @@ function removePassenger(carId, empId){
   save();
 }
 
+function exportPdf(){
+  window.print();
+}
+
 function exportData(){
   const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
@@ -319,6 +362,25 @@ function render(){
   renderRoster();
   renderCars();
   renderUnassigned();
+  renderLeftSidebar();
+}
+
+function renderLeftSidebar(){
+  const box = document.getElementById("leftSidebar");
+  const leftPeople = data.roster.filter(e => e.status === "left").sort((a,b)=>a.name.localeCompare(b.name));
+  if(!leftPeople.length){
+    box.innerHTML = '<p class="empty-note">No one is currently marked as left.</p>';
+    return;
+  }
+  box.innerHTML = '<ul class="left-list">' + leftPeople.map(e => {
+    const car = data.cars.find(c => c.driverId === e.id || c.passengerIds.includes(e.id));
+    const where = car ? `⚠️ still in ${car.name}` : "not assigned to a car";
+    return `<li>
+      <span class="left-name">${e.name}</span>
+      <span class="left-where">${where}</span>
+      <button class="small" onclick="toggleStatus('${e.id}')">↺ Mark active</button>
+    </li>`;
+  }).join("") + '</ul>';
 }
 
 function renderUnassigned(){
@@ -357,12 +419,17 @@ function renderRoster(){
   });
 }
 
+const CAR_COLORS = ["#2f5597", "#1e7e34", "#b06a00", "#8e44ad", "#c0392b", "#117a8b"];
+
 function renderCars(){
   const grid = document.getElementById("carsGrid");
   grid.innerHTML = "";
-  data.cars.forEach(car => {
+  data.cars.forEach((car, index) => {
     const card = document.createElement("div");
     card.className = "car-card";
+    const color = CAR_COLORS[index % CAR_COLORS.length];
+    card.style.setProperty("--car-color", color);
+    const icon = car.driverId ? "🚗" : "🚶";
 
     // Only people with no seat anywhere else (or already this car's driver) can become this car's driver.
     const availableForDriver = data.roster.filter(e => {
@@ -374,7 +441,7 @@ function renderCars(){
 
     const chipHtml = car.passengerIds.map(id => {
       const left = isLeft(id);
-      return `<span class="chip ${left?'left':''}">${employeeName(id)}${left?' ⚠️':''}<button onclick="removePassenger('${car.id}','${id}')">✕</button></span>`;
+      return `<span class="chip ${left?'left':''}">💺 ${employeeName(id)}${left?' ⚠️':''}<button onclick="removePassenger('${car.id}','${id}')">✕</button></span>`;
     }).join("");
 
     // Once someone is seated (driver or passenger) in any car, they drop out of
@@ -384,11 +451,14 @@ function renderCars(){
 
     card.innerHTML = `
       <div class="car-title">
-        <input type="text" value="${car.name}" onchange="renameCar('${car.id}', this.value)">
+        <div class="car-icon">${icon}</div>
+        <div class="car-title-text">
+          <input type="text" value="${car.name}" onchange="renameCar('${car.id}', this.value)">
+        </div>
         <button class="small danger remove-car" onclick="deleteCar('${car.id}')">✕</button>
       </div>
       <div class="driver-row">
-        Driver:
+        <span class="driver-icon">🧑‍✈️</span>
         <select onchange="setDriver('${car.id}', this.value)">${driverOptions}</select>
       </div>
       <div class="chip-list">${chipHtml || '<span style="color:var(--muted); font-size:12px;">No passengers yet</span>'}</div>
