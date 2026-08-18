@@ -39,6 +39,14 @@
     background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:18px; margin-bottom:18px;
   }
   .panel h2{margin:0 0 12px; font-size:16px;}
+  .panel-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;}
+  .panel-header h2{margin:0;}
+  .roster-panel.collapsed .panel-body{display:none;}
+  .unassigned-box{
+    background:var(--orange-bg); border:1px solid #f0dcae; color:var(--orange);
+    border-radius:8px; padding:10px 14px; margin-bottom:14px; font-size:13px;
+  }
+  .unassigned-box strong{margin-right:6px;}
   #alertBanner{
     display:none; background:var(--red-bg); border:1px solid #f0c4c0; color:var(--red);
     border-radius:10px; padding:14px 18px; margin-bottom:18px; font-size:13px;
@@ -107,20 +115,26 @@
 
   <div id="alertBanner"></div>
 
-  <div class="panel roster-panel">
-    <h2>Employee Roster</h2>
-    <table>
-      <thead><tr><th>Name</th><th>Status</th><th></th></tr></thead>
-      <tbody id="rosterBody"></tbody>
-    </table>
-    <div class="add-row">
-      <input type="text" id="newEmployeeName" placeholder="New employee name">
-      <button class="primary" onclick="addEmployee()">+ Add employee</button>
+  <div class="panel roster-panel" id="rosterPanel">
+    <div class="panel-header">
+      <h2>Employee Roster</h2>
+      <button class="small" id="rosterToggleBtn" onclick="toggleRoster()">Show</button>
+    </div>
+    <div class="panel-body">
+      <table>
+        <thead><tr><th>Name</th><th>Status</th><th></th></tr></thead>
+        <tbody id="rosterBody"></tbody>
+      </table>
+      <div class="add-row">
+        <input type="text" id="newEmployeeName" placeholder="New employee name">
+        <button class="primary" onclick="addEmployee()">+ Add employee</button>
+      </div>
     </div>
   </div>
 
   <div class="panel">
     <h2>Cars &amp; Groups</h2>
+    <div id="unassignedBox"></div>
     <div class="cars" id="carsGrid"></div>
     <div class="add-row">
       <input type="text" id="newCarName" placeholder="New car / group name (e.g. Priya's Car)">
@@ -133,6 +147,7 @@
 
 <script>
 const STORAGE_KEY = "seatingPlanData_v1";
+const ROSTER_VISIBLE_KEY = "seatingPlanRosterVisible_v1";
 
 const SEED = {
   roster: [
@@ -192,6 +207,23 @@ function uid(prefix){ return prefix + "_" + Math.random().toString(36).slice(2,9
 function employeeById(id){ return data.roster.find(e => e.id === id); }
 function employeeName(id){ const e = employeeById(id); return e ? e.name : "(unknown)"; }
 function isLeft(id){ const e = employeeById(id); return e ? e.status === "left" : false; }
+
+// A person can only hold one seat across the whole plan (driver or passenger,
+// in any car/group). This finds which car (if any) currently holds them.
+function assignedCarId(empId){
+  const car = data.cars.find(c => c.driverId === empId || c.passengerIds.includes(empId));
+  return car ? car.id : null;
+}
+
+function toggleRoster(){
+  const visible = document.getElementById("rosterPanel").classList.contains("collapsed");
+  setRosterVisible(visible);
+}
+function setRosterVisible(visible){
+  document.getElementById("rosterPanel").classList.toggle("collapsed", !visible);
+  document.getElementById("rosterToggleBtn").textContent = visible ? "Hide" : "Show";
+  localStorage.setItem(ROSTER_VISIBLE_KEY, visible ? "1" : "0");
+}
 
 function addEmployee(){
   const input = document.getElementById("newEmployeeName");
@@ -286,6 +318,14 @@ function render(){
   renderAlert();
   renderRoster();
   renderCars();
+  renderUnassigned();
+}
+
+function renderUnassigned(){
+  const box = document.getElementById("unassignedBox");
+  const unassigned = data.roster.filter(e => e.status === "active" && assignedCarId(e.id) === null);
+  if(!unassigned.length){ box.innerHTML = ""; return; }
+  box.innerHTML = `<div class="unassigned-box"><strong>🪑 Not yet placed (${unassigned.length}):</strong>${unassigned.map(e => e.name).join(", ")}</div>`;
 }
 
 function renderAlert(){
@@ -324,7 +364,11 @@ function renderCars(){
     const card = document.createElement("div");
     card.className = "car-card";
 
-    const availableForDriver = data.roster.filter(e => e.status === "active" || e.id === car.driverId);
+    // Only people with no seat anywhere else (or already this car's driver) can become this car's driver.
+    const availableForDriver = data.roster.filter(e => {
+      const free = assignedCarId(e.id) === null || e.id === car.driverId;
+      return free && (e.status === "active" || e.id === car.driverId);
+    });
     const driverOptions = `<option value="">— no driver / self-drive —</option>` +
       availableForDriver.map(e => `<option value="${e.id}" ${e.id===car.driverId?"selected":""}>${e.name}${e.status==='left'?' (left)':''}</option>`).join("");
 
@@ -333,7 +377,9 @@ function renderCars(){
       return `<span class="chip ${left?'left':''}">${employeeName(id)}${left?' ⚠️':''}<button onclick="removePassenger('${car.id}','${id}')">✕</button></span>`;
     }).join("");
 
-    const availableToAdd = data.roster.filter(e => !car.passengerIds.includes(e.id) && e.id !== car.driverId && e.status === "active");
+    // Once someone is seated (driver or passenger) in any car, they drop out of
+    // every other car's "add passenger" list — one seat per person, plan-wide.
+    const availableToAdd = data.roster.filter(e => e.status === "active" && assignedCarId(e.id) === null);
     const addOptions = `<option value="">+ add passenger…</option>` + availableToAdd.map(e => `<option value="${e.id}">${e.name}</option>`).join("");
 
     card.innerHTML = `
@@ -354,6 +400,7 @@ function renderCars(){
   });
 }
 
+setRosterVisible(localStorage.getItem(ROSTER_VISIBLE_KEY) === "1");
 render();
 </script>
 </body>
